@@ -1,4 +1,4 @@
-from typing import Type, Any, Optional
+from typing import Type, Any, Optional, Dict, Callable
 
 import tet.services
 from pyramid.config import Configurator
@@ -68,7 +68,9 @@ def setup_sqlalchemy(config: Configurator,
                      settings: Optional[dict] =_NOT_SET,
                      prefix: str ='sqlalchemy.',
                      engine: Optional['sqlalchemy.Engine'] =_NOT_SET,
-                     name: str='') -> None:
+                     name: str='',
+                     post_init_session: Optional[Callable[['sqlalchemy.orm.Session', Request], None]] = None
+                     ) -> None:
 
     """
     Sets up SQLAlchemy, creating a request scoped service for the ORM session.
@@ -81,6 +83,8 @@ def setup_sqlalchemy(config: Configurator,
     :param engine: The engine to use - if specified, settings must not be
                 given, or vice versa
     :param name: the alternate name for which to bind the session service
+    :param post_init_session: optional callback to run after an SQLAlchemy
+                session is initialized
     """
 
     from sqlalchemy import engine_from_config
@@ -105,7 +109,10 @@ def setup_sqlalchemy(config: Configurator,
     config.registry['tet.sqlalchemy.simple.factories'][name] = session_factory
 
     def _session_service(context: Any, request: Request):
-        return get_tm_session(session_factory, request.tm)
+        session = get_tm_session(session_factory, request.tm)
+        if post_init_session:
+            post_init_session(session, request)
+        return session
 
     config.register_service_factory(
         _session_service, Session, Interface, name=name)
